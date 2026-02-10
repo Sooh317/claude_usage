@@ -22,6 +22,168 @@ def load_all_records(start_date: date, end_date: date) -> list[dict]:
     return all_records
 
 
+def _to_float(val: Any) -> float:
+    """Safely convert a value to float (handles strings like '$1.23')."""
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        try:
+            return float(val.replace("$", "").replace(",", "").replace("%", ""))
+        except ValueError:
+            return 0.0
+    return 0.0
+
+
+def _empty_day(date_str: str) -> dict[str, Any]:
+    """Return a daily entry with all values zeroed out."""
+    return {
+        "Date": date_str,
+        "Sessions": 0,
+        "Active Time (hrs)": 0,
+        "User Prompts": 0,
+        "API Calls": 0,
+        "Total Cost ($)": 0,
+        "Input Tokens": 0,
+        "Output Tokens": 0,
+        "Cache Read Tokens": 0,
+        "Cache Creation Tokens": 0,
+        "Total Tokens": 0,
+        "Lines Added": 0,
+        "Lines Removed": 0,
+        "Commits": 0,
+        "Pull Requests": 0,
+        "Tool Calls": 0,
+        "Tool Success Rate (%)": 0,
+        "Top Tools": "",
+        "API Errors": 0,
+        "Avg API Duration (ms)": 0,
+        "Model Breakdown": "",
+        "model_details": {},
+    }
+
+
+def _compute_aggregate(daily_stats: list[dict], start_date: date, end_date: date) -> dict[str, Any]:
+    """Compute aggregate metrics from a list of daily summaries."""
+    days_with_data = len(daily_stats)
+
+    # Sum metrics
+    total_sessions = sum(_to_float(d.get("Sessions", 0)) for d in daily_stats)
+    total_api_calls = sum(_to_float(d.get("API Calls", 0)) for d in daily_stats)
+    total_cost = sum(_to_float(d.get("Total Cost ($)", 0)) for d in daily_stats)
+    total_input_tokens = sum(_to_float(d.get("Input Tokens", 0)) for d in daily_stats)
+    total_output_tokens = sum(_to_float(d.get("Output Tokens", 0)) for d in daily_stats)
+    total_cache_read = sum(_to_float(d.get("Cache Read Tokens", 0)) for d in daily_stats)
+    total_cache_creation = sum(_to_float(d.get("Cache Creation Tokens", 0)) for d in daily_stats)
+    total_tokens = sum(_to_float(d.get("Total Tokens", 0)) for d in daily_stats)
+    total_lines_added = sum(_to_float(d.get("Lines Added", 0)) for d in daily_stats)
+    total_lines_removed = sum(_to_float(d.get("Lines Removed", 0)) for d in daily_stats)
+    total_commits = sum(_to_float(d.get("Commits", 0)) for d in daily_stats)
+    total_prs = sum(_to_float(d.get("Pull Requests", 0)) for d in daily_stats)
+    total_tool_calls = sum(_to_float(d.get("Tool Calls", 0)) for d in daily_stats)
+    total_api_errors = sum(_to_float(d.get("API Errors", 0)) for d in daily_stats)
+    total_user_prompts = sum(_to_float(d.get("User Prompts", 0)) for d in daily_stats)
+
+    # Average metrics
+    total_active_time = sum(_to_float(d.get("Active Time (hrs)", 0)) for d in daily_stats)
+    avg_active_time_per_day = total_active_time / days_with_data if days_with_data > 0 else 0
+
+    # Weighted average for tool success rate
+    total_tool_success_weighted = sum(
+        _to_float(d.get("Tool Success Rate (%)", 0)) * _to_float(d.get("Tool Calls", 0))
+        for d in daily_stats
+    )
+    avg_tool_success_rate = (
+        total_tool_success_weighted / total_tool_calls if total_tool_calls > 0 else 0
+    )
+
+    # Weighted average for API duration
+    total_duration_weighted = sum(
+        _to_float(d.get("Avg API Duration (ms)", 0)) * _to_float(d.get("API Calls", 0))
+        for d in daily_stats
+    )
+    avg_api_duration = (
+        total_duration_weighted / total_api_calls if total_api_calls > 0 else 0
+    )
+
+    # Merge top tools across all days
+    all_tools_counter: Counter[str] = Counter()
+    for d in daily_stats:
+        top_tools_str = d.get("Top Tools", "")
+        if isinstance(top_tools_str, str) and top_tools_str:
+            tools = [t.strip() for t in top_tools_str.split(",")]
+            for tool in tools:
+                if tool:
+                    all_tools_counter[tool] += 1
+    top_tools = ", ".join(name for name, _ in all_tools_counter.most_common(3))
+
+    # Merge model breakdown
+    all_model_costs: dict[str, float] = {}
+    for d in daily_stats:
+        model_breakdown_str = d.get("Model Breakdown", "")
+        if isinstance(model_breakdown_str, str) and model_breakdown_str:
+            for part in model_breakdown_str.split(","):
+                part = part.strip()
+                if ": $" in part:
+                    model, cost_str = part.split(": $", 1)
+                    model = model.strip()
+                    try:
+                        cost = float(cost_str)
+                        all_model_costs[model] = all_model_costs.get(model, 0) + cost
+                    except ValueError:
+                        pass
+
+    model_breakdown = ", ".join(
+        f"{m}: ${c:.2f}" for m, c in sorted(all_model_costs.items())
+    )
+
+    # Merge model_details across days
+    merged_model_details: dict[str, dict] = {}
+    for d in daily_stats:
+        for model, details in d.get("model_details", {}).items():
+            if model not in merged_model_details:
+                merged_model_details[model] = {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_creation_tokens": 0,
+                    "cost": 0.0,
+                }
+            md = merged_model_details[model]
+            md["input_tokens"] += int(_to_float(details.get("input_tokens", 0)))
+            md["output_tokens"] += int(_to_float(details.get("output_tokens", 0)))
+            md["cache_read_tokens"] += int(_to_float(details.get("cache_read_tokens", 0)))
+            md["cache_creation_tokens"] += int(_to_float(details.get("cache_creation_tokens", 0)))
+            md["cost"] += _to_float(details.get("cost", 0))
+    for md in merged_model_details.values():
+        md["cost"] = round(md["cost"], 6)
+
+    return {
+        "Date": f"{start_date.isoformat()} to {end_date.isoformat()}",
+        "Sessions": int(total_sessions),
+        "Active Time (hrs)": round(total_active_time, 2),
+        "Avg Active Time/day (hrs)": round(avg_active_time_per_day, 2),
+        "User Prompts": int(total_user_prompts),
+        "API Calls": int(total_api_calls),
+        "Total Cost ($)": round(total_cost, 4),
+        "Input Tokens": int(total_input_tokens),
+        "Output Tokens": int(total_output_tokens),
+        "Cache Read Tokens": int(total_cache_read),
+        "Cache Creation Tokens": int(total_cache_creation),
+        "Total Tokens": int(total_tokens),
+        "Lines Added": int(total_lines_added),
+        "Lines Removed": int(total_lines_removed),
+        "Commits": int(total_commits),
+        "Pull Requests": int(total_prs),
+        "Tool Calls": int(total_tool_calls),
+        "Tool Success Rate (%)": round(avg_tool_success_rate, 1),
+        "Top Tools": top_tools,
+        "API Errors": int(total_api_errors),
+        "Avg API Duration (ms)": round(avg_api_duration, 1),
+        "Model Breakdown": model_breakdown,
+        "model_details": merged_model_details,
+    }
+
+
 def aggregate_range(start_date: date, end_date: date) -> dict[str, Any]:
     """Aggregate statistics for a date range.
 
@@ -55,103 +217,7 @@ def aggregate_range(start_date: date, end_date: date) -> dict[str, Any]:
             "daily": []
         }
 
-    # Calculate aggregated metrics
-    # Sum metrics
-    total_sessions = sum(d.get("Sessions", 0) for d in daily_stats)
-    total_api_calls = sum(d.get("API Calls", 0) for d in daily_stats)
-    total_cost = sum(d.get("Total Cost ($)", 0) for d in daily_stats)
-    total_input_tokens = sum(d.get("Input Tokens", 0) for d in daily_stats)
-    total_output_tokens = sum(d.get("Output Tokens", 0) for d in daily_stats)
-    total_cache_read = sum(d.get("Cache Read Tokens", 0) for d in daily_stats)
-    total_cache_creation = sum(d.get("Cache Creation Tokens", 0) for d in daily_stats)
-    total_tokens = sum(d.get("Total Tokens", 0) for d in daily_stats)
-    total_lines_added = sum(d.get("Lines Added", 0) for d in daily_stats)
-    total_lines_removed = sum(d.get("Lines Removed", 0) for d in daily_stats)
-    total_commits = sum(d.get("Commits", 0) for d in daily_stats)
-    total_prs = sum(d.get("Pull Requests", 0) for d in daily_stats)
-    total_tool_calls = sum(d.get("Tool Calls", 0) for d in daily_stats)
-    total_api_errors = sum(d.get("API Errors", 0) for d in daily_stats)
-    total_user_prompts = sum(d.get("User Prompts", 0) for d in daily_stats)
-
-    # Average metrics
-    total_active_time = sum(d.get("Active Time (hrs)", 0) for d in daily_stats)
-    avg_active_time_per_day = total_active_time / days_with_data
-
-    # Weighted average for tool success rate
-    total_tool_success_weighted = sum(
-        d.get("Tool Success Rate (%)", 0) * d.get("Tool Calls", 0)
-        for d in daily_stats
-    )
-    avg_tool_success_rate = (
-        total_tool_success_weighted / total_tool_calls if total_tool_calls > 0 else 0
-    )
-
-    # Weighted average for API duration
-    total_duration_weighted = sum(
-        d.get("Avg API Duration (ms)", 0) * d.get("API Calls", 0)
-        for d in daily_stats
-    )
-    avg_api_duration = (
-        total_duration_weighted / total_api_calls if total_api_calls > 0 else 0
-    )
-
-    # Merge top tools across all days
-    all_tools_counter: Counter[str] = Counter()
-    for d in daily_stats:
-        top_tools_str = d.get("Top Tools", "")
-        if top_tools_str:
-            tools = [t.strip() for t in top_tools_str.split(",")]
-            for tool in tools:
-                if tool:
-                    all_tools_counter[tool] += 1
-    top_tools = ", ".join(name for name, _ in all_tools_counter.most_common(3))
-
-    # Merge model breakdown
-    all_model_costs: dict[str, float] = {}
-    for d in daily_stats:
-        model_breakdown_str = d.get("Model Breakdown", "")
-        if model_breakdown_str:
-            # Parse "model1: $X, model2: $Y"
-            for part in model_breakdown_str.split(","):
-                part = part.strip()
-                if ": $" in part:
-                    model, cost_str = part.split(": $")
-                    model = model.strip()
-                    try:
-                        cost = float(cost_str)
-                        all_model_costs[model] = all_model_costs.get(model, 0) + cost
-                    except ValueError:
-                        pass
-
-    model_breakdown = ", ".join(
-        f"{m}: ${c:.2f}" for m, c in sorted(all_model_costs.items())
-    )
-
-    # Build aggregated result
-    aggregate = {
-        "Date": f"{start_date.isoformat()} to {end_date.isoformat()}",
-        "Sessions": int(total_sessions),
-        "Active Time (hrs)": round(total_active_time, 2),
-        "Avg Active Time/day (hrs)": round(avg_active_time_per_day, 2),
-        "User Prompts": int(total_user_prompts),
-        "API Calls": int(total_api_calls),
-        "Total Cost ($)": round(total_cost, 4),
-        "Input Tokens": int(total_input_tokens),
-        "Output Tokens": int(total_output_tokens),
-        "Cache Read Tokens": int(total_cache_read),
-        "Cache Creation Tokens": int(total_cache_creation),
-        "Total Tokens": int(total_tokens),
-        "Lines Added": int(total_lines_added),
-        "Lines Removed": int(total_lines_removed),
-        "Commits": int(total_commits),
-        "Pull Requests": int(total_prs),
-        "Tool Calls": int(total_tool_calls),
-        "Tool Success Rate (%)": round(avg_tool_success_rate, 1),
-        "Top Tools": top_tools,
-        "API Errors": int(total_api_errors),
-        "Avg API Duration (ms)": round(avg_api_duration, 1),
-        "Model Breakdown": model_breakdown,
-    }
+    aggregate = _compute_aggregate(daily_stats, start_date, end_date)
 
     return {
         "period_start": start_date.isoformat(),
@@ -172,14 +238,49 @@ def aggregate_week(start_date: date) -> dict[str, Any]:
 
 
 def aggregate_month(year: int, month: int) -> dict[str, Any]:
-    """Aggregate statistics for a specific month."""
+    """Aggregate statistics for a specific month.
+
+    Fills all days of the month (default 0), using Google Sheets
+    as a fallback data source for days without local JSONL data.
+    """
     import calendar
+
+    from . import sheets
 
     start_date = date(year, month, 1)
     last_day = calendar.monthrange(year, month)[1]
     end_date = date(year, month, last_day)
 
     result = aggregate_range(start_date, end_date)
+
+    # Build map of dates from JSONL data
+    jsonl_dates = {d["Date"]: d for d in result["daily"]}
+
+    # Read from Google Sheets as fallback for days without JSONL
+    sheets_data = sheets.read_month_data(year, month)
+
+    # Fill all days of the month
+    full_daily = []
+    for day in range(1, last_day + 1):
+        date_str = f"{year}-{month:02d}-{day:02d}"
+        if date_str in jsonl_dates:
+            full_daily.append(jsonl_dates[date_str])
+        elif date_str in sheets_data:
+            full_daily.append(sheets_data[date_str])
+        else:
+            full_daily.append(_empty_day(date_str))
+
+    # Recompute aggregate from all days that have actual data
+    data_days = [
+        d for d in full_daily
+        if _to_float(d.get("Total Cost ($)", 0)) > 0
+        or _to_float(d.get("API Calls", 0)) > 0
+    ]
+    if data_days:
+        result["aggregate"] = _compute_aggregate(data_days, start_date, end_date)
+        result["days_with_data"] = len(data_days)
+
+    result["daily"] = full_daily
     result["period_type"] = "month"
     result["month"] = f"{year}-{month:02d}"
     return result

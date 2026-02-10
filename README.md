@@ -150,6 +150,7 @@ claude_usage/
 │   ├── aggregator.py           # 日次集計
 │   ├── sheets.py               # Google Sheets連携
 │   ├── analytics.py            # 複数日集計ロジック
+│   ├── pricing.py              # Anthropic API料金テーブル (https://docs.anthropic.com/en/docs/about-claude/pricing)
 │   ├── utils.py                # 日付ヘルパー
 │   └── api/                    # REST APIエンドポイント
 │       ├── stats.py            # 統計データAPI

@@ -45,8 +45,15 @@ function createCostTrendChart(data) {
     const daily = data.daily || [data];
     if (!daily || daily.length === 0) return;
 
-    const labels = daily.map(d => d.Date);
-    const costs = daily.map(d => d['Total Cost ($)'] || 0);
+    // Show day numbers (1, 2, ...) on x-axis
+    const labels = daily.map(d => {
+        const parts = d.Date.split('-');
+        return parseInt(parts[2], 10);
+    });
+    const costs = daily.map(d => {
+        const v = d['Total Cost ($)'];
+        return (typeof v === 'string') ? parseFloat(v.replace('$', '').replace(',', '')) || 0 : (v || 0);
+    });
 
     destroyChart('costTrendChart');
 
@@ -63,8 +70,10 @@ function createCostTrendChart(data) {
                 borderColor: '#3b82f6',
                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
                 borderWidth: 2,
-                tension: 0.4,
-                fill: true
+                tension: 0.3,
+                fill: true,
+                pointRadius: 3,
+                pointHoverRadius: 6
             }]
         },
         options: {
@@ -84,16 +93,188 @@ function createCostTrendChart(data) {
                     callbacks: {
                         label: function(context) {
                             return `Cost: $${context.parsed.y.toFixed(4)}`;
+                        },
+                        title: function(tooltipItems) {
+                            return `Day ${tooltipItems[0].label}`;
                         }
                     }
                 }
             },
             scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Day of Month'
+                    }
+                },
                 y: {
                     beginAtZero: true,
                     ticks: {
                         callback: function(value) {
                             return '$' + value.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Shorten a full model ID to a readable legend label.
+ * e.g. "claude-sonnet-4-5-20250929" → "Sonnet 4.5"
+ * @param {string} modelId
+ * @returns {string}
+ */
+function shortenModelName(modelId) {
+    const m = modelId.match(/claude-(\w+)-([\d]+(?:-[\d]+)*)/);
+    if (!m) return modelId;
+    const family = m[1].charAt(0).toUpperCase() + m[1].slice(1); // Sonnet, Opus, Haiku
+    const ver = m[2].split('-').slice(0, 2).join('.');           // "4-5" → "4.5"
+    return `${family} ${ver}`;
+}
+
+// Palette for per-model datasets (up to 8 models)
+const MODEL_COLORS = [
+    { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.20)' },
+    { border: '#10b981', bg: 'rgba(16, 185, 129, 0.20)' },
+    { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.20)' },
+    { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.20)' },
+    { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.20)' },
+    { border: '#ec4899', bg: 'rgba(236, 72, 153, 0.20)' },
+    { border: '#14b8a6', bg: 'rgba(20, 184, 166, 0.20)' },
+    { border: '#6366f1', bg: 'rgba(99, 102, 241, 0.20)' },
+];
+
+/**
+ * Create Token Trend Chart (Per-model stacked area chart for monthly view)
+ * @param {Object} data - Statistics data with daily array
+ */
+function createTokenTrendChart(data) {
+    const daily = data.daily || [data];
+    if (!daily || daily.length === 0) return;
+
+    const labels = daily.map(d => {
+        const parts = d.Date.split('-');
+        return parseInt(parts[2], 10);
+    });
+
+    // Collect all model IDs across all days
+    const modelSet = new Set();
+    daily.forEach(d => {
+        const md = d.model_details || {};
+        Object.keys(md).forEach(m => modelSet.add(m));
+    });
+    const models = Array.from(modelSet).sort();
+
+    // Build one stacked dataset per model (total tokens in K)
+    const datasets = models.map((model, idx) => {
+        const color = MODEL_COLORS[idx % MODEL_COLORS.length];
+        const dataPoints = daily.map(d => {
+            const md = (d.model_details || {})[model];
+            if (!md) return 0;
+            const total = (md.input_tokens || 0) + (md.output_tokens || 0)
+                        + (md.cache_read_tokens || 0) + (md.cache_creation_tokens || 0);
+            return total / 1000;
+        });
+        return {
+            label: shortenModelName(model),
+            data: dataPoints,
+            borderColor: color.border,
+            backgroundColor: color.bg,
+            borderWidth: 2,
+            tension: 0.3,
+            fill: true,
+            pointRadius: 3,
+            pointHoverRadius: 6,
+            // Stash full model id + daily details for tooltip
+            _modelId: model,
+            _dailyDetails: daily.map(d => (d.model_details || {})[model] || null),
+        };
+    });
+
+    // Fallback: if no model_details at all, show legacy total-token view
+    if (datasets.length === 0) {
+        const toNum = (v) => (typeof v === 'string') ? parseFloat(v.replace(/[$,%]/g, '')) || 0 : (v || 0);
+        datasets.push({
+            label: 'Total (K)',
+            data: daily.map(d => toNum(d['Total Tokens']) / 1000),
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.15)',
+            borderWidth: 2,
+            tension: 0.3,
+            fill: true,
+            pointRadius: 3,
+            pointHoverRadius: 6,
+        });
+    }
+
+    destroyChart('tokenTrendChart');
+
+    const ctx = document.getElementById('tokenTrendChart');
+    if (!ctx) return;
+
+    chartInstances['tokenTrendChart'] = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Token Usage by Model',
+                    font: { size: 16, weight: 'bold' }
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            return `Day ${tooltipItems[0].label}`;
+                        },
+                        label: function(context) {
+                            const ds = context.dataset;
+                            const details = ds._dailyDetails && ds._dailyDetails[context.dataIndex];
+                            if (details) {
+                                const inp = (details.input_tokens || 0) / 1000;
+                                const out = (details.output_tokens || 0) / 1000;
+                                const cr = (details.cache_read_tokens || 0) / 1000;
+                                const cc = (details.cache_creation_tokens || 0) / 1000;
+                                const cost = details.cost || 0;
+                                return `${ds.label}: ${context.parsed.y.toFixed(1)}K `
+                                     + `(In:${inp.toFixed(1)} Out:${out.toFixed(1)} `
+                                     + `CR:${cr.toFixed(1)} CW:${cc.toFixed(1)}) `
+                                     + `$${cost.toFixed(4)}`;
+                            }
+                            return `${ds.label}: ${context.parsed.y.toFixed(1)}K`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Day of Month'
+                    }
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Tokens (K)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value.toFixed(0) + 'K';
                         }
                     }
                 }
@@ -397,11 +578,28 @@ function createHourlyActivityChart(data) {
         return;
     }
 
-    // Sort by hour to ensure chronological order (0-23)
-    const hourly = [...data.hourly].sort((a, b) => a.hour - b.hour);
+    // Convert UTC hours to local time
+    let hourly = data.hourly.map(h => {
+        const local = utcHourToLocal(h.hour, data.date);
+        return { ...h, localHour: local.hour, localTimeRange: local.timeRange };
+    });
+
+    // Sort by local hour (0-23)
+    hourly.sort((a, b) => a.localHour - b.localHour);
+
+    // For today's data, truncate future hours so current hour is at the right edge
+    const isToday = data.date === getToday();
+    if (isToday) {
+        const currentLocalHour = new Date().getHours();
+        hourly = hourly.filter(h => h.localHour <= currentLocalHour);
+        if (hourly.length === 0) {
+            console.warn('No hourly data available for current hours');
+            return;
+        }
+    }
 
     // Extract data
-    const labels = hourly.map(h => h.time_range);
+    const labels = hourly.map(h => h.localTimeRange);
     const apiCalls = hourly.map(h => h.api_calls || 0);
     const tokensInK = hourly.map(h => (h.total_tokens || 0) / 1000);
     const costs = hourly.map(h => h.total_cost || 0);
@@ -488,7 +686,7 @@ function createHourlyActivityChart(data) {
                     display: true,
                     title: {
                         display: true,
-                        text: 'Hour of Day (UTC)'
+                        text: 'Hour of Day'
                     },
                     ticks: {
                         maxRotation: 45,

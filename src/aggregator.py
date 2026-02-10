@@ -10,7 +10,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from . import sheets
+from . import pricing, sheets
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -118,16 +118,41 @@ def aggregate(target_date: date) -> dict:
     tool_success_rate = (tool_success / total_tool_calls * 100) if total_tool_calls else 0.0
     top_tools = ", ".join(name for name, _ in tool_counter.most_common(3))
 
-    # Model breakdown
-    model_costs: dict[str, float] = {}
+    # Per-model token breakdown and pricing-based cost
+    model_details: dict[str, dict] = {}
     for r in _event_records(records, "api_request"):
         attrs = r["data"].get("attributes", {})
         body = r["data"].get("body", {})
         src = attrs if attrs else (body if isinstance(body, dict) else {})
         model = src.get("model", "unknown")
-        cost = float(src.get("cost_usd", 0))
-        model_costs[model] = model_costs.get(model, 0) + cost
-    model_breakdown = ", ".join(f"{m}: ${c:.2f}" for m, c in sorted(model_costs.items()))
+        if model not in model_details:
+            model_details[model] = {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cache_read_tokens": 0,
+                "cache_creation_tokens": 0,
+                "cost": 0.0,
+            }
+        md = model_details[model]
+        m_in = float(src.get("input_tokens", 0))
+        m_out = float(src.get("output_tokens", 0))
+        m_cr = float(src.get("cache_read_tokens", 0))
+        m_cc = float(src.get("cache_creation_tokens", 0))
+        md["input_tokens"] += int(m_in)
+        md["output_tokens"] += int(m_out)
+        md["cache_read_tokens"] += int(m_cr)
+        md["cache_creation_tokens"] += int(m_cc)
+        md["cost"] += pricing.calculate_cost(model, m_in, m_out, m_cr, m_cc)
+
+    # Round costs
+    for md in model_details.values():
+        md["cost"] = round(md["cost"], 6)
+
+    # Derive total cost and model breakdown string from pricing
+    total_cost_priced = round(sum(md["cost"] for md in model_details.values()), 4)
+    model_breakdown = ", ".join(
+        f"{m}: ${md['cost']:.2f}" for m, md in sorted(model_details.items())
+    )
 
     # Unique sessions
     session_ids = set()
@@ -146,7 +171,7 @@ def aggregate(target_date: date) -> dict:
         "Active Time (hrs)": round(_metric_sum(records, "active_time.total") / 3600, 2),
         "User Prompts": _event_count(records, "user_prompt"),
         "API Calls": _event_count(records, "api_request"),
-        "Total Cost ($)": round(_sum_attr(records, "api_request", "cost_usd"), 4),
+        "Total Cost ($)": total_cost_priced,
         "Input Tokens": int(input_tokens),
         "Output Tokens": int(output_tokens),
         "Cache Read Tokens": int(cache_read),
@@ -162,6 +187,7 @@ def aggregate(target_date: date) -> dict:
         "API Errors": _event_count(records, "api_error"),
         "Avg API Duration (ms)": round(_avg_attr(records, "api_request", "duration_ms"), 1),
         "Model Breakdown": model_breakdown,
+        "model_details": model_details,
     }
 
 
