@@ -119,3 +119,10 @@ Helper functions for aggregation:
 - `_event_count(records, event_name)` - Count log events
 - `_sum_attr(records, event_name, attr_key)` - Sum attribute across events
 - `_avg_attr(records, event_name, attr_key)` - Average attribute value
+
+## Known Limitations
+
+**Code Activity Metrics**:
+- Lines Added/Removed metrics are not currently captured by Claude Code's OTLP telemetry
+- The Code Activity chart will show "No code metrics available" message
+- Future enhancement: Extract Git statistics separately (see issue #3)

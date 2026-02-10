@@ -311,11 +311,34 @@ function createCodeStackChart(data) {
     const linesAdded = daily.map(d => d['Lines Added'] || 0);
     const linesRemoved = daily.map(d => d['Lines Removed'] || 0);
 
+    // Check if all values are 0 (no data)
+    const hasData = linesAdded.some(v => v > 0) || linesRemoved.some(v => v > 0);
+
     destroyChart('codeStackChart');
 
     const ctx = document.getElementById('codeStackChart');
     if (!ctx) return;
 
+    // If no data, show placeholder message
+    if (!hasData) {
+        const container = ctx.closest('.chart-container');
+        if (container) {
+            container.innerHTML = \`
+                <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #6b7280;">
+                    <div style="text-align: center;">
+                        <h3 style="margin-bottom: 0.5rem;">Code Activity</h3>
+                        <p>No code metrics available</p>
+                        <p style="font-size: 0.875rem; color: #9ca3af;">
+                            Code metrics (lines added/removed) are not yet captured by telemetry
+                        </p>
+                    </div>
+                </div>
+            \`;
+        }
+        return;
+    }
+
+    // Otherwise, render chart normally
     chartInstances['codeStackChart'] = new Chart(ctx, {
         type: 'bar',
         data: {
