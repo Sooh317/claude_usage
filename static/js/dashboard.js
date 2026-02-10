@@ -261,8 +261,10 @@ function hideHourlyChart() {
         chartRow.style.display = 'none';
     }
 
-    // Destroy chart instance if exists
-    destroyChart('hourlyActivityChart');
+    // Safely destroy chart if destroyChart function exists
+    if (typeof destroyChart !== 'undefined') {
+        destroyChart('hourlyActivityChart');
+    }
 }
 
 /**
@@ -283,7 +285,10 @@ function hideCostTrendChart() {
     if (container) {
         container.style.display = 'none';
     }
-    destroyChart('costTrendChart');
+    // Safely destroy chart if destroyChart function exists
+    if (typeof destroyChart !== 'undefined') {
+        destroyChart('costTrendChart');
+    }
 }
 
 // Initialize when DOM is ready
