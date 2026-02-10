@@ -374,7 +374,8 @@ function createHourlyActivityChart(data) {
         return;
     }
 
-    const hourly = data.hourly;
+    // Sort by hour to ensure chronological order (0-23)
+    const hourly = [...data.hourly].sort((a, b) => a.hour - b.hour);
 
     // Extract data
     const labels = hourly.map(h => h.time_range);
