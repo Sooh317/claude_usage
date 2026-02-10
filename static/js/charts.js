@@ -323,7 +323,7 @@ function createCodeStackChart(data) {
     if (!hasData) {
         const container = ctx.closest('.chart-container');
         if (container) {
-            container.innerHTML = \`
+            container.innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #6b7280;">
                     <div style="text-align: center;">
                         <h3 style="margin-bottom: 0.5rem;">Code Activity</h3>
@@ -333,7 +333,7 @@ function createCodeStackChart(data) {
                         </p>
                     </div>
                 </div>
-            \`;
+            `;
         }
         return;
     }
@@ -398,7 +398,18 @@ function createHourlyActivityChart(data) {
     }
 
     // Sort by hour to ensure chronological order (0-23)
-    const hourly = [...data.hourly].sort((a, b) => a.hour - b.hour);
+    let hourly = [...data.hourly].sort((a, b) => a.hour - b.hour);
+
+    // For today's data, truncate future hours so current hour is at the right edge
+    const isToday = data.date === getToday();
+    if (isToday) {
+        const currentUtcHour = new Date().getUTCHours();
+        hourly = hourly.filter(h => h.hour <= currentUtcHour);
+        if (hourly.length === 0) {
+            console.warn('No hourly data available for current hours');
+            return;
+        }
+    }
 
     // Extract data
     const labels = hourly.map(h => h.time_range);
