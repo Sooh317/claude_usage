@@ -504,7 +504,7 @@ function createCodeStackChart(data) {
     if (!hasData) {
         const container = ctx.closest('.chart-container');
         if (container) {
-            container.innerHTML = \`
+            container.innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #6b7280;">
                     <div style="text-align: center;">
                         <h3 style="margin-bottom: 0.5rem;">Code Activity</h3>
@@ -514,7 +514,7 @@ function createCodeStackChart(data) {
                         </p>
                     </div>
                 </div>
-            \`;
+            `;
         }
         return;
     }
