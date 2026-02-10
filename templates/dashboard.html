@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p>Loading data...</p>
+</div>
+
+<!-- Metrics Cards Row -->
+<div class="metrics-row">
+    <div class="metric-card" id="cost-card">
+        <div class="metric-label">Total Cost</div>
+        <div class="metric-value">Loading...</div>
+        <div class="metric-trend"></div>
+    </div>
+
+    <div class="metric-card" id="time-card">
+        <div class="metric-label">Active Time</div>
+        <div class="metric-value">Loading...</div>
+        <div class="metric-trend"></div>
+    </div>
+
+    <div class="metric-card" id="calls-card">
+        <div class="metric-label">API Calls</div>
+        <div class="metric-value">Loading...</div>
+        <div class="metric-trend"></div>
+    </div>
+
+    <div class="metric-card" id="efficiency-card">
+        <div class="metric-label">Token Efficiency</div>
+        <div class="metric-value">Loading...</div>
+        <div class="metric-trend"></div>
+    </div>
+</div>
+
+<!-- Cost Trend Chart (Full Width) -->
+<div class="chart-row full-width">
+    <div class="chart-container">
+        <canvas id="costTrendChart"></canvas>
+    </div>
+</div>
+
+<!-- Token Usage & Model Breakdown (2 columns) -->
+<div class="chart-row">
+    <div class="chart-container">
+        <canvas id="tokenPieChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <canvas id="modelBarChart"></canvas>
+    </div>
+</div>
+
+<!-- Tool Usage & Code Activity (2 columns) -->
+<div class="chart-row">
+    <div class="chart-container">
+        <canvas id="toolBarChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <canvas id="codeStackChart"></canvas>
+    </div>
+</div>
+
+<!-- Insights Section (Phase 4) -->
+<div id="insights" class="insights-section">
+    <h3>Insights</h3>
+    <p>Advanced insights coming in Phase 4...</p>
+</div>
+{% endblock %}

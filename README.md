@@ -67,7 +67,32 @@ source ~/.zshrc
 
 ## 使い方
 
-### 動作確認
+### Web Analytics Dashboard 🚀
+
+**NEW!** ブラウザで使用統計をインタラクティブに確認できるWebダッシュボードが利用可能です：
+
+```bash
+# ブラウザで開く
+open http://localhost:4318/
+```
+
+**主な機能:**
+
+- 📅 **期間切り替え**: Daily / Weekly / Monthly 表示
+- 📊 **5つのチャート**: コストトレンド、トークン使用、モデル別コスト、ツール使用、コードアクティビティ
+- 💰 **メトリクスカード**: 総コスト、アクティブ時間、APIコール数、トークン効率
+- 📥 **CSVエクスポート**: 経費報告用にデータをダウンロード
+- 📱 **レスポンシブ対応**: モバイルでも閲覧可能
+
+**使い方:**
+
+1. ブラウザで http://localhost:4318/ を開く
+2. 上部のタブ（Daily/Weekly/Monthly）で期間を選択
+3. 日付ピッカーで確認したい日付を選択
+4. チャートとメトリクスが自動更新される
+5. 「Export CSV」でデータをダウンロード
+
+### コマンドライン操作
 
 ```bash
 # Receiverの状態確認
@@ -78,6 +103,11 @@ uv run python -m src.aggregator --dry-run
 
 # 実際にGoogle Sheetsにアップロード
 uv run python -m src.aggregator
+
+# API経由でデータ取得
+curl http://localhost:4318/api/stats/daily
+curl "http://localhost:4318/api/stats/weekly?start_date=2026-02-03"
+curl "http://localhost:4318/api/stats/monthly?month=2026-02"
 ```
 
 ### 記録される統計
@@ -116,9 +146,21 @@ claude_usage/
 ├── README.md
 ├── GOOGLE_SHEETS_SETUP.md      # Sheets連携ガイド
 ├── src/
-│   ├── receiver.py             # OTLP受信サーバー
+│   ├── receiver.py             # OTLP受信サーバー & Web UI
 │   ├── aggregator.py           # 日次集計
-│   └── sheets.py               # Google Sheets連携
+│   ├── sheets.py               # Google Sheets連携
+│   ├── analytics.py            # 複数日集計ロジック
+│   ├── utils.py                # 日付ヘルパー
+│   └── api/                    # REST APIエンドポイント
+│       ├── stats.py            # 統計データAPI
+│       ├── analysis.py         # 分析API (Phase 4)
+│       └── export.py           # CSVエクスポート
+├── templates/                  # Jinja2テンプレート
+│   ├── base.html
+│   └── dashboard.html
+├── static/                     # 静的ファイル
+│   ├── css/                    # スタイルシート
+│   └── js/                     # JavaScript
 ├── config/
 │   ├── com.claude-usage.receiver.plist    # Receiver常駐設定
 │   └── com.claude-usage.daily.plist       # 日次集計設定

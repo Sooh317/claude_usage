@@ -1,0 +1,365 @@
+// Chart.js configuration and rendering
+// This will be fully implemented in Phase 3
+
+// Store chart instances
+const chartInstances = {};
+
+/**
+ * Destroy a chart instance
+ * @param {string} chartId - Canvas element ID
+ */
+function destroyChart(chartId) {
+    if (chartInstances[chartId]) {
+        chartInstances[chartId].destroy();
+        delete chartInstances[chartId];
+    }
+}
+
+/**
+ * Configure Chart.js defaults
+ */
+function configureChartDefaults() {
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js not loaded yet');
+        return;
+    }
+
+    Chart.defaults.responsive = true;
+    Chart.defaults.maintainAspectRatio = false;
+    Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    Chart.defaults.color = '#6b7280';
+}
+
+// Configure defaults when script loads
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', configureChartDefaults);
+} else {
+    configureChartDefaults();
+}
+
+/**
+ * Create Cost Trend Chart (Line chart)
+ * @param {Object} data - Statistics data
+ */
+function createCostTrendChart(data) {
+    const daily = data.daily || [data];
+    if (!daily || daily.length === 0) return;
+
+    const labels = daily.map(d => d.Date);
+    const costs = daily.map(d => d['Total Cost ($)'] || 0);
+
+    destroyChart('costTrendChart');
+
+    const ctx = document.getElementById('costTrendChart');
+    if (!ctx) return;
+
+    chartInstances['costTrendChart'] = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Total Cost',
+                data: costs,
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Cost Trend',
+                    font: { size: 16, weight: 'bold' }
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Cost: $${context.parsed.y.toFixed(4)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Create Token Usage Chart (Pie chart)
+ * @param {Object} data - Statistics data
+ */
+function createTokenPieChart(data) {
+    const stats = data.aggregate || data;
+    if (!stats) return;
+
+    const input = stats['Input Tokens'] || 0;
+    const output = stats['Output Tokens'] || 0;
+    const cacheRead = stats['Cache Read Tokens'] || 0;
+    const cacheCreation = stats['Cache Creation Tokens'] || 0;
+
+    destroyChart('tokenPieChart');
+
+    const ctx = document.getElementById('tokenPieChart');
+    if (!ctx) return;
+
+    chartInstances['tokenPieChart'] = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: ['Input', 'Output', 'Cache Read', 'Cache Creation'],
+            datasets: [{
+                data: [input, output, cacheRead, cacheCreation],
+                backgroundColor: [
+                    '#3b82f6',  // Blue
+                    '#10b981',  // Green
+                    '#f59e0b',  // Orange
+                    '#8b5cf6'   // Purple
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Token Usage Distribution',
+                    font: { size: 16, weight: 'bold' }
+                },
+                legend: {
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${label}: ${value.toLocaleString()} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Create Model Breakdown Chart (Horizontal bar chart)
+ * @param {Object} data - Statistics data
+ */
+function createModelBarChart(data) {
+    const stats = data.aggregate || data;
+    if (!stats || !stats['Model Breakdown']) return;
+
+    // Parse "model1: $X, model2: $Y"
+    const breakdown = stats['Model Breakdown'];
+    const models = [];
+    const costs = [];
+
+    const parts = breakdown.split(',');
+    parts.forEach(part => {
+        const match = part.trim().match(/^(.+?):\s*\$(.+)$/);
+        if (match) {
+            models.push(match[1].trim());
+            costs.push(parseFloat(match[2]));
+        }
+    });
+
+    if (models.length === 0) return;
+
+    destroyChart('modelBarChart');
+
+    const ctx = document.getElementById('modelBarChart');
+    if (!ctx) return;
+
+    chartInstances['modelBarChart'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: models,
+            datasets: [{
+                label: 'Cost ($)',
+                data: costs,
+                backgroundColor: '#3b82f6',
+                borderColor: '#2563eb',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y',  // Horizontal bars
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Model Cost Breakdown',
+                    font: { size: 16, weight: 'bold' }
+                },
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `$${context.parsed.x.toFixed(4)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Create Tool Usage Chart (Bar chart)
+ * @param {Object} data - Statistics data
+ */
+function createToolBarChart(data) {
+    const stats = data.aggregate || data;
+    if (!stats || !stats['Top Tools']) return;
+
+    // Parse "Tool1, Tool2, Tool3"
+    const topTools = stats['Top Tools'].split(',').map(t => t.trim()).filter(t => t);
+
+    if (topTools.length === 0) {
+        // No tools data
+        return;
+    }
+
+    // For now, just show the tool names with dummy counts
+    // Phase 4 will add detailed tool usage tracking
+    const dummyCounts = topTools.map((_, i) => (topTools.length - i) * 10);
+
+    destroyChart('toolBarChart');
+
+    const ctx = document.getElementById('toolBarChart');
+    if (!ctx) return;
+
+    chartInstances['toolBarChart'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: topTools,
+            datasets: [{
+                label: 'Usage Count',
+                data: dummyCounts,
+                backgroundColor: '#10b981',
+                borderColor: '#059669',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Top Tools Used',
+                    font: { size: 16, weight: 'bold' }
+                },
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Create Code Activity Chart (Stacked bar chart)
+ * @param {Object} data - Statistics data
+ */
+function createCodeStackChart(data) {
+    const daily = data.daily || [data];
+    if (!daily || daily.length === 0) return;
+
+    const labels = daily.map(d => d.Date);
+    const linesAdded = daily.map(d => d['Lines Added'] || 0);
+    const linesRemoved = daily.map(d => d['Lines Removed'] || 0);
+
+    destroyChart('codeStackChart');
+
+    const ctx = document.getElementById('codeStackChart');
+    if (!ctx) return;
+
+    chartInstances['codeStackChart'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Lines Added',
+                    data: linesAdded,
+                    backgroundColor: '#10b981',
+                    borderColor: '#059669',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Lines Removed',
+                    data: linesRemoved,
+                    backgroundColor: '#ef4444',
+                    borderColor: '#dc2626',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Code Activity',
+                    font: { size: 16, weight: 'bold' }
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}

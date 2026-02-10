@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -24,6 +26,28 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 app = FastAPI(title="Claude Usage OTLP Receiver")
+
+# Static files and templates (will be populated in Phase 2)
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
+
+# Create directories if they don't exist
+STATIC_DIR.mkdir(exist_ok=True)
+TEMPLATE_DIR.mkdir(exist_ok=True)
+
+# Mount static files (CSS, JS)
+try:
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+except RuntimeError:
+    # Directory might be empty, that's ok for now
+    pass
+
+templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
+
+# Include API routers
+from .api import stats, export
+app.include_router(stats.router, prefix="/api/stats", tags=["stats"])
+app.include_router(export.router, prefix="/api/export", tags=["export"])
 
 
 def _jsonl_path() -> Path:
@@ -180,6 +204,13 @@ async def receive_traces(request: Request) -> JSONResponse:
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "data_dir": str(DATA_DIR)}
+
+
+@app.get("/", response_class=HTMLResponse)
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request) -> HTMLResponse:
+    """Main analytics dashboard."""
+    return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
 if __name__ == "__main__":
