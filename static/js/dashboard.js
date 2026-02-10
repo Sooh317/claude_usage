@@ -175,10 +175,13 @@ function renderCharts(data) {
     // Create charts based on period
     // Cost Trend is only meaningful for monthly view
     if (currentPeriod === 'monthly') {
+        showCostTrendChart();           // Show container first so Chart.js can compute dimensions
         createCostTrendChart(data);
-        showCostTrendChart();
+        showTokenTrendChart();
+        createTokenTrendChart(data);
     } else {
         hideCostTrendChart();
+        hideTokenTrendChart();
     }
 
     createTokenPieChart(data);
@@ -208,7 +211,7 @@ async function exportToCSV() {
             startDate = currentDate;
             const end = new Date(currentDate + 'T00:00:00');
             end.setDate(end.getDate() + 6);
-            endDate = end.toISOString().split('T')[0];
+            endDate = toLocalDateString(end);
         } else if (currentPeriod === 'monthly') {
             // currentDate is in YYYY-MM format for monthly
             const [year, month] = currentDate.split('-');
@@ -273,7 +276,30 @@ function hideHourlyChart() {
 function showCostTrendChart() {
     const container = document.getElementById('costTrendChart')?.closest('.chart-row');
     if (container) {
-        container.style.display = 'block';
+        container.style.display = '';  // Restore CSS default (grid)
+    }
+}
+
+/**
+ * Show token trend chart container
+ */
+function showTokenTrendChart() {
+    const container = document.getElementById('tokenTrendChart')?.closest('.chart-row');
+    if (container) {
+        container.style.display = '';
+    }
+}
+
+/**
+ * Hide token trend chart container
+ */
+function hideTokenTrendChart() {
+    const container = document.getElementById('tokenTrendChart')?.closest('.chart-row');
+    if (container) {
+        container.style.display = 'none';
+    }
+    if (typeof destroyChart !== 'undefined') {
+        destroyChart('tokenTrendChart');
     }
 }
 

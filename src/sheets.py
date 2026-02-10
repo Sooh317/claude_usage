@@ -88,6 +88,27 @@ def _check_duplicate(ws: gspread.Worksheet, target_date: str) -> bool:
     return target_date in dates
 
 
+def read_month_data(year: int, month: int) -> dict[str, dict]:
+    """Read daily rows for a given month from Google Sheets.
+
+    Returns:
+        Dict mapping date string (YYYY-MM-DD) to row data dict.
+    """
+    try:
+        ws = _get_sheet()
+        rows = ws.get_all_records()
+        prefix = f"{year}-{month:02d}"
+        result = {}
+        for row in rows:
+            d = str(row.get("Date", ""))
+            if d.startswith(prefix):
+                result[d] = dict(row)
+        return result
+    except Exception:
+        log.warning("Could not read from Google Sheets", exc_info=True)
+        return {}
+
+
 def append_row(summary: dict) -> None:
     """Append a daily summary row to Google Sheets."""
     ws = _get_sheet()

@@ -40,12 +40,45 @@ function formatNumber(value, decimals = 0) {
 }
 
 /**
+ * Format a Date object as YYYY-MM-DD using local timezone
+ * @param {Date} d - Date object
+ * @returns {string} Date in YYYY-MM-DD format (local)
+ */
+function toLocalDateString(d) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+/**
+ * Convert a UTC hour to local hour for a given date
+ * @param {number} utcHour - Hour in UTC (0-23)
+ * @param {string} dateStr - Date in YYYY-MM-DD format
+ * @returns {{hour: number, timeRange: string}} Local hour and formatted time range
+ */
+function utcHourToLocal(utcHour, dateStr) {
+    // Use noon of the target date to get timezone offset (avoids DST boundary issues)
+    const noon = new Date(dateStr + 'T12:00:00');
+    const offsetMinutes = noon.getTimezoneOffset(); // negative for east of UTC
+    const offsetHours = -offsetMinutes / 60;
+
+    let localHour = utcHour + Math.round(offsetHours);
+    // Wrap around 0-23
+    localHour = ((localHour % 24) + 24) % 24;
+
+    const nextHour = (localHour + 1) % 24;
+    const timeRange = `${String(localHour).padStart(2, '0')}:00-${String(nextHour).padStart(2, '0')}:00`;
+
+    return { hour: localHour, timeRange };
+}
+
+/**
  * Get today's date in YYYY-MM-DD format
  * @returns {string} Today's date
  */
 function getToday() {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+    return toLocalDateString(new Date());
 }
 
 /**
@@ -54,11 +87,11 @@ function getToday() {
  * @returns {string} Monday's date in YYYY-MM-DD format
  */
 function getWeekStart(date) {
-    const d = typeof date === 'string' ? new Date(date + 'T00:00:00') : date;
+    const d = typeof date === 'string' ? new Date(date + 'T00:00:00') : new Date(date);
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
-    const monday = new Date(d.setDate(diff));
-    return monday.toISOString().split('T')[0];
+    d.setDate(diff);
+    return toLocalDateString(d);
 }
 
 /**
