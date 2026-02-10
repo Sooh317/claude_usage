@@ -58,10 +58,12 @@ function switchPeriod(newPeriod) {
         tab.classList.toggle('active', tab.dataset.period === newPeriod);
     });
 
-    // Update date picker type
+    // Update date picker type and date
     const datePicker = document.getElementById('date-picker');
     if (newPeriod === 'daily') {
         datePicker.type = 'date';
+        // Reset to today when switching to daily view
+        currentDate = getToday();
         datePicker.value = currentDate;
     } else if (newPeriod === 'weekly') {
         datePicker.type = 'date';
@@ -70,7 +72,13 @@ function switchPeriod(newPeriod) {
         datePicker.value = currentDate;
     } else if (newPeriod === 'monthly') {
         datePicker.type = 'month';
-        datePicker.value = getMonthString(new Date());
+        currentDate = getMonthString(new Date());
+        datePicker.value = currentDate;
+    }
+
+    // Hide hourly chart when switching away from daily
+    if (newPeriod !== 'daily') {
+        hideHourlyChart();
     }
 
     // Reload data
@@ -113,7 +121,15 @@ async function loadData() {
 
     } catch (error) {
         hideLoading();
-        showError(`Failed to load data: ${error.message}`);
+
+        // Show more user-friendly error messages
+        if (error.message.includes('404')) {
+            showError(`No data available for ${currentDate}. Please select a different date.`);
+        } else if (error.message.includes('500')) {
+            showError(`Server error while loading data. Please try again or contact support.`);
+        } else {
+            showError(`Failed to load data: ${error.message}`);
+        }
     }
 }
 
@@ -162,6 +178,13 @@ function renderCharts(data) {
     createModelBarChart(data);
     createToolBarChart(data);
     createCodeStackChart(data);
+
+    // Show hourly chart only in daily view
+    if (currentPeriod === 'daily') {
+        showHourlyChart(currentDate);
+    } else {
+        hideHourlyChart();
+    }
 }
 
 /**
@@ -194,6 +217,45 @@ async function exportToCSV() {
     } catch (error) {
         showError(`Failed to export CSV: ${error.message}`);
     }
+}
+
+/**
+ * Show hourly activity chart for a specific date
+ * @param {string} date - Date in YYYY-MM-DD format
+ */
+async function showHourlyChart(date) {
+    try {
+        const chartRow = document.getElementById('hourly-chart-row');
+        if (!chartRow) return;
+
+        // Show the chart container
+        chartRow.style.display = 'block';
+
+        // Fetch hourly data
+        const hourlyData = await fetchHourlyStats(date);
+
+        // Render the chart
+        createHourlyActivityChart(hourlyData);
+
+    } catch (error) {
+        // Silently hide chart if no hourly data available (404)
+        // This is expected for dates without data
+        console.info('Hourly chart not available for this date:', error.message);
+        hideHourlyChart();
+    }
+}
+
+/**
+ * Hide hourly activity chart
+ */
+function hideHourlyChart() {
+    const chartRow = document.getElementById('hourly-chart-row');
+    if (chartRow) {
+        chartRow.style.display = 'none';
+    }
+
+    // Destroy chart instance if exists
+    destroyChart('hourlyActivityChart');
 }
 
 // Initialize when DOM is ready

@@ -363,3 +363,152 @@ function createCodeStackChart(data) {
         }
     });
 }
+
+/**
+ * Create Hourly Activity Chart (Multi-line chart)
+ * @param {Object} data - Hourly statistics data
+ */
+function createHourlyActivityChart(data) {
+    if (!data || !data.hourly || data.hourly.length === 0) {
+        console.warn('No hourly data available');
+        return;
+    }
+
+    const hourly = data.hourly;
+
+    // Extract data
+    const labels = hourly.map(h => h.time_range);
+    const apiCalls = hourly.map(h => h.api_calls || 0);
+    const tokensInK = hourly.map(h => (h.total_tokens || 0) / 1000);
+    const costs = hourly.map(h => h.total_cost || 0);
+
+    destroyChart('hourlyActivityChart');
+
+    const ctx = document.getElementById('hourlyActivityChart');
+    if (!ctx) return;
+
+    chartInstances['hourlyActivityChart'] = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'API Calls',
+                    data: apiCalls,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: false,
+                    yAxisID: 'y-calls'
+                },
+                {
+                    label: 'Tokens (K)',
+                    data: tokensInK,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: false,
+                    yAxisID: 'y-tokens'
+                },
+                {
+                    label: 'Cost ($)',
+                    data: costs,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: false,
+                    yAxisID: 'y-cost'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Hourly Activity Pattern',
+                    font: { size: 16, weight: 'bold' }
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.dataset.label || '';
+                            const value = context.parsed.y;
+
+                            if (label === 'API Calls') {
+                                return `${label}: ${value.toFixed(0)}`;
+                            } else if (label === 'Tokens (K)') {
+                                return `${label}: ${value.toFixed(1)}K`;
+                            } else if (label === 'Cost ($)') {
+                                return `${label}: $${value.toFixed(4)}`;
+                            }
+                            return `${label}: ${value}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'Hour of Day (UTC)'
+                    },
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                },
+                'y-calls': {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'API Calls',
+                        color: '#3b82f6'
+                    },
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#3b82f6'
+                    }
+                },
+                'y-tokens': {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Tokens (K)',
+                        color: '#10b981'
+                    },
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#10b981'
+                    },
+                    grid: {
+                        drawOnChartArea: false
+                    }
+                },
+                'y-cost': {
+                    type: 'linear',
+                    display: false,
+                    position: 'right',
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}

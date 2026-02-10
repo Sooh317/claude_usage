@@ -109,3 +109,29 @@ async function fetchAvailableDates() {
         throw error;
     }
 }
+
+/**
+ * Fetch hourly statistics for a single day
+ * @param {string} date - Date in YYYY-MM-DD format (optional, defaults to today)
+ * @param {string} granularity - Time bucket size (default: "1h")
+ * @returns {Promise<Object>} Hourly statistics
+ */
+async function fetchHourlyStats(date = null, granularity = "1h") {
+    try {
+        let url = `${API_BASE}/stats/hourly?granularity=${granularity}`;
+        if (date) {
+            url += `&date=${date}`;
+        }
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching hourly stats:', error);
+        throw error;
+    }
+}

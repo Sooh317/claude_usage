@@ -2,7 +2,7 @@
 
 import json
 from collections import Counter
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -183,3 +183,112 @@ def aggregate_month(year: int, month: int) -> dict[str, Any]:
     result["period_type"] = "month"
     result["month"] = f"{year}-{month:02d}"
     return result
+
+
+def _bucket_by_hour(records: list[dict]) -> dict[int, list[dict]]:
+    """Group records by hour (0-23) based on timestamp."""
+    buckets: dict[int, list[dict]] = {hour: [] for hour in range(24)}
+
+    for record in records:
+        ts_str = record.get("ts")
+        if not ts_str:
+            continue
+
+        try:
+            # Parse ISO 8601 timestamp
+            ts = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+            hour = ts.hour
+            buckets[hour].append(record)
+        except (ValueError, AttributeError):
+            continue
+
+    return buckets
+
+
+def aggregate_hourly(target_date: date, granularity: str = "1h") -> dict[str, Any]:
+    """Aggregate statistics by hour for a single day.
+
+    Args:
+        target_date: Date to aggregate
+        granularity: Time bucket size (currently only "1h" supported)
+
+    Returns:
+        {
+            "date": "YYYY-MM-DD",
+            "granularity": "1h",
+            "timezone": "UTC",
+            "hourly": [
+                {
+                    "hour": 0,
+                    "time_range": "00:00-01:00",
+                    "api_calls": 10,
+                    "input_tokens": 5000,
+                    "output_tokens": 3000,
+                    "cache_read_tokens": 1000,
+                    "cache_creation_tokens": 500,
+                    "total_tokens": 9500,
+                    "total_cost": 0.0123,
+                    "tool_calls": 5,
+                    "avg_duration_ms": 1234.5
+                },
+                ...
+            ]
+        }
+    """
+    # Load all records for the target date
+    records = aggregator.load_records(target_date)
+
+    if not records:
+        return {
+            "date": target_date.isoformat(),
+            "granularity": granularity,
+            "timezone": "UTC",
+            "hourly": []
+        }
+
+    # Group records by hour
+    hourly_buckets = _bucket_by_hour(records)
+
+    # Aggregate metrics for each hour
+    hourly_stats = []
+
+    for hour in range(24):
+        hour_records = hourly_buckets[hour]
+
+        # Count metrics
+        api_calls = aggregator._event_count(hour_records, "api_request")
+        tool_calls = aggregator._event_count(hour_records, "tool_result")
+
+        # Token counts
+        input_tokens = aggregator._sum_attr(hour_records, "api_request", "input_tokens")
+        output_tokens = aggregator._sum_attr(hour_records, "api_request", "output_tokens")
+        cache_read = aggregator._sum_attr(hour_records, "api_request", "cache_read_tokens")
+        cache_creation = aggregator._sum_attr(hour_records, "api_request", "cache_creation_tokens")
+        total_tokens = input_tokens + output_tokens + cache_read + cache_creation
+
+        # Cost
+        total_cost = aggregator._sum_attr(hour_records, "api_request", "cost_usd")
+
+        # Average API duration
+        avg_duration = aggregator._avg_attr(hour_records, "api_request", "duration_ms")
+
+        hourly_stats.append({
+            "hour": hour,
+            "time_range": f"{hour:02d}:00-{(hour+1):02d}:00",
+            "api_calls": int(api_calls),
+            "input_tokens": int(input_tokens),
+            "output_tokens": int(output_tokens),
+            "cache_read_tokens": int(cache_read),
+            "cache_creation_tokens": int(cache_creation),
+            "total_tokens": int(total_tokens),
+            "total_cost": round(total_cost, 4),
+            "tool_calls": int(tool_calls),
+            "avg_duration_ms": round(avg_duration, 1)
+        })
+
+    return {
+        "date": target_date.isoformat(),
+        "granularity": granularity,
+        "timezone": "UTC",
+        "hourly": hourly_stats
+    }

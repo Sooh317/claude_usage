@@ -40,9 +40,22 @@ canvas {
     border-radius: 2px;
 }
 
+/* Hourly Activity Chart */
+#hourly-chart-row .chart-container {
+    min-height: 350px;
+}
+
+#hourlyActivityChart {
+    height: 350px !important;
+}
+
 /* Responsive Charts */
 @media (max-width: 768px) {
     .chart-container canvas {
         max-height: 250px;
+    }
+
+    #hourlyActivityChart {
+        height: 300px !important;
     }
 }

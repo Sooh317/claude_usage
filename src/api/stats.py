@@ -181,3 +181,54 @@ async def get_available_dates() -> dict[str, Any]:
     except Exception as e:
         log.exception("Error fetching available dates")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/hourly")
+async def get_hourly_stats(
+    date_param: str | None = Query(None, alias="date", description="Date in YYYY-MM-DD format"),
+    granularity: str = Query("1h", description="Time bucket size (default: 1h)")
+) -> dict[str, Any]:
+    """Get hourly statistics for a single day.
+
+    Args:
+        date_param: Target date (YYYY-MM-DD). Defaults to today.
+        granularity: Time bucket size (currently only "1h" supported)
+
+    Returns:
+        {
+            "date": "YYYY-MM-DD",
+            "granularity": "1h",
+            "timezone": "UTC",
+            "hourly": [
+                {
+                    "hour": 0,
+                    "time_range": "00:00-01:00",
+                    "api_calls": 10,
+                    ...
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        if date_param is None:
+            target_date = date.today()
+        else:
+            target_date = date.fromisoformat(date_param)
+
+        log.info("Fetching hourly stats for %s (granularity: %s)", target_date, granularity)
+        result = analytics.aggregate_hourly(target_date, granularity)
+
+        if not result.get("hourly"):
+            raise HTTPException(
+                status_code=404,
+                detail=f"No data available for {target_date.isoformat()}"
+            )
+
+        return result
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {e}")
+    except Exception as e:
+        log.exception("Error fetching hourly stats")
+        raise HTTPException(status_code=500, detail=str(e))
