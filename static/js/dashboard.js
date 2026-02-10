@@ -172,8 +172,15 @@ function renderMetricCards(data) {
 function renderCharts(data) {
     console.log('Rendering charts with data:', data);
 
-    // Create all charts
-    createCostTrendChart(data);
+    // Create charts based on period
+    // Cost Trend is only meaningful for monthly view
+    if (currentPeriod === 'monthly') {
+        createCostTrendChart(data);
+        showCostTrendChart();
+    } else {
+        hideCostTrendChart();
+    }
+
     createTokenPieChart(data);
     createModelBarChart(data);
     createToolBarChart(data);
@@ -256,6 +263,27 @@ function hideHourlyChart() {
 
     // Destroy chart instance if exists
     destroyChart('hourlyActivityChart');
+}
+
+/**
+ * Show cost trend chart container
+ */
+function showCostTrendChart() {
+    const container = document.getElementById('costTrendChart')?.closest('.chart-row');
+    if (container) {
+        container.style.display = 'block';
+    }
+}
+
+/**
+ * Hide cost trend chart container
+ */
+function hideCostTrendChart() {
+    const container = document.getElementById('costTrendChart')?.closest('.chart-row');
+    if (container) {
+        container.style.display = 'none';
+    }
+    destroyChart('costTrendChart');
 }
 
 // Initialize when DOM is ready
